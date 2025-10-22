@@ -19,8 +19,8 @@ CREATE TABLE components (
 
 CREATE TABLE process (
     process_id SERIAL PRIMARY KEY,
-    component_id INT NOT NULL REFERENCES components(component_id) ON DELETE CASCADE,
-    material_id INT NOT NULL REFERENCES materials(material_id) ON DELETE CASCADE,
+    component_id INT NOT NULL REFERENCES components(component_id),
+    material_id INT NOT NULL REFERENCES materials(material_id),
     material_amount NUMERIC(10,2) NOT NULL CHECK (material_amount > 0),
     operation_id INT NOT NULL REFERENCES operations(operation_id)
 );
@@ -33,7 +33,7 @@ CREATE TABLE products (
 
 CREATE TABLE product_components (
     id SERIAL PRIMARY KEY,
-    product_id INT NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
+    product_id INT NOT NULL REFERENCES products(product_id),
     component_id INT NOT NULL REFERENCES components(component_id),
     quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
     UNIQUE(product_id, component_id)
@@ -76,3 +76,29 @@ AFTER UPDATE OF price ON materials
 FOR EACH ROW
 EXECUTE FUNCTION update_component_prices();
 
+CREATE OR REPLACE FUNCTION cascade_delete_product()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM product_components WHERE product_id = OLD.product_id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_cascade_delete_product
+AFTER DELETE ON products
+FOR EACH ROW
+EXECUTE FUNCTION cascade_delete_product();
+
+CREATE OR REPLACE FUNCTION cascade_delete_component()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM process WHERE component_id = OLD.component_id;
+    DELETE FROM product_components WHERE component_id = OLD.component_id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_cascade_delete_component
+AFTER DELETE ON components
+FOR EACH ROW
+EXECUTE FUNCTION cascade_delete_component();
